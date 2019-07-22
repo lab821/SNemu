@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ivy-module version="2.0" xmlns:e="http://ant.apache.org/ivy/extra">
+	<info organisation="net.varys"
+		module="varys-core_2.10"
+		revision="0.2.0-SNAPSHOT"
+		status="integration"
+		publication="20190429100304"
+	>
+		<description>
+		varys-core
+		</description>
+	</info>
+	<configurations>
+		<conf name="compile" visibility="public" description=""/>
+		<conf name="runtime" visibility="public" description="" extends="compile"/>
+		<conf name="test" visibility="public" description="" extends="runtime"/>
+		<conf name="provided" visibility="public" description=""/>
+		<conf name="optional" visibility="public" description=""/>
+		<conf name="compile-internal" visibility="private" description="" extends="compile,optional,provided"/>
+		<conf name="runtime-internal" visibility="private" description="" extends="runtime,optional"/>
+		<conf name="test-internal" visibility="private" description="" extends="test,optional,provided"/>
+		<conf name="plugin" visibility="private" description=""/>
+		<conf name="sources" visibility="public" description=""/>
+		<conf name="docs" visibility="public" description=""/>
+		<conf name="pom" visibility="public" description=""/>
+		<conf name="scala-tool" visibility="private" description=""/>
+	</configurations>
+	<publications>
+		<artifact name="varys-core_2.10" type="pom" ext="pom" conf="pom"/>
+		<artifact name="varys-core_2.10" type="jar" ext="jar" conf="compile"/>
+		<artifact name="varys-core_2.10" type="src" ext="jar" conf="sources" e:classifier="sources"/>
+		<artifact name="varys-core_2.10" type="doc" ext="jar" conf="docs" e:classifier="javadoc"/>
+	</publications>
+	<dependencies>
+		<dependency org="org.scala-lang" name="scala-compiler" rev="2.10.4" conf="scala-tool->default,optional(default)"/>
+		<dependency org="org.scala-lang" name="scala-library" rev="2.10.4" conf="scala-tool->default,optional(default);compile->default(compile)"/>
+		<dependency org="org.eclipse.jetty" name="jetty-server" rev="8.1.14.v20131031" conf="compile->default(compile)"/>
+		<dependency org="com.google.guava" name="guava" rev="11.0.1" conf="compile->default(compile)"/>
+		<dependency org="log4j" name="log4j" rev="1.2.17" conf="compile->default(compile)"/>
+		<dependency org="org.slf4j" name="slf4j-api" rev="1.7.5" conf="compile->default(compile)"/>
+		<dependency org="org.slf4j" name="slf4j-log4j12" rev="1.7.5" conf="compile->default(compile)"/>
+		<dependency org="com.google.protobuf" name="protobuf-java" rev="2.4.1" conf="compile->default(compile)"/>
+		<dependency org="com.typesafe.akka" name="akka-actor_2.10" rev="2.2.3" conf="compile->default(compile)">
+			<exclude org="org.jboss.netty" module="*" name="*" type="*" ext="*" conf="" matcher="exact"/>
+		</dependency>
+		<dependency org="com.typesafe.akka" name="akka-remote_2.10" rev="2.2.3" conf="compile->default(compile)">
+			<exclude org="org.jboss.netty" module="*" name="*" type="*" ext="*" conf="" matcher="exact"/>
+		</dependency>
+		<dependency org="com.typesafe.akka" name="akka-slf4j_2.10" rev="2.2.3" conf="compile->default(compile)">
+			<exclude org="org.jboss.netty" module="*" name="*" type="*" ext="*" conf="" matcher="exact"/>
+		</dependency>
+		<dependency org="net.liftweb" name="lift-json_2.10" rev="2.5.1" conf="compile->default(compile)"/>
+		<dependency org="io.netty" name="netty-all" rev="4.0.23.Final" conf="compile->default(compile)"/>
+		<dependency org="org.fusesource" name="sigar" rev="1.6.4" conf="compile->default(compile)">
+			<artifact name="sigar" type="jar" ext="jar" conf="*" e:classifier="native"/>
+			<artifact name="sigar" type="jar" ext="jar" conf="*" e:classifier=""/>
+		</dependency>
+		<dependency org="com.esotericsoftware.kryo" name="kryo" rev="2.19" conf="compile->default(compile)"/>
+		<dependency org="javax.servlet" name="javax.servlet-api" rev="3.0.1" conf="compile->default(compile)"/>
+		<dependency org="com.github.romix.akka" name="akka-kryo-serialization_2.10" rev="0.3.1" conf="compile->default(compile)"/>
+	</dependencies>
+</ivy-module>

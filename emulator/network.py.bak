@@ -1,0 +1,567 @@
+from mininet.topo import Topo
+from mininet.node import Controller, RemoteController, OVSKernelSwitch, CPULimitedHost, OVSController, Docker
+from mininet.net import Containernet, Mininet
+from mininet.link import TCLink
+from mininet.cli import CLI
+from mininet.util import custom, irange
+from mininet.log import setLogLevel, info, warn, error, debug
+from mininet.topo import LinearTopo
+from mininet.topolib import TreeTopo
+
+from topology import FatTreeTopo, NonBlockingTopo, LinearMultipathTopo
+
+from subprocess import Popen, PIPE
+from argparse import ArgumentParser
+import multiprocessing
+from time import sleep
+#from monitor.monitor import monitor_devs_ng
+import os
+import sys
+import json
+from sflow import wrapper
+
+#from simulator import simulator
+
+# Number of pods in Fat-Tree
+K = 4
+
+# Queue Size
+QUEUE_SIZE = 100
+
+# Link capacity (Mbps)
+BW = 10
+
+def ManagementNet(net, bw=BW, queue=100):
+    "Create an empty network and add nodes to it."
+    #link = custom(TCLink, bw=bw, max_queue_size=queue, delay="1ms")
+    link = custom(TCLink, bw=bw)
+    #if remoteController is True:
+    #    controller = RemoteController
+    #else:
+    #    controller = OVSController
+    #net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=controller, autoSetMacs=True, autoStaticArp=False)
+
+    info('*** Adding second controller\n')
+    controller = net.addController('c1', controller=OVSController)
+
+    info('*** Adding management switch\n')
+    # Adding switches
+    print "mgnt0"
+    switch = net.addSwitch("mgnt0")
+
+    info('*** Creating links to hosts\n')
+    # Creating links to hosts
+    i = 1
+    for host in net.hosts:
+        print "linking %s to %s" % (host.name, switch.name)
+        link = net.addLink(host, switch)
+        host.setIP(("10.128.0.%s/9" % str(i)), intf=link.intf1)
+        i += 1
+        print ""
+
+    return controller, switch
+
+
+def NonBlockingNet(k=4, bw=10, cpu=-1, queue=100):
+    ''' Create a NonBlocking Net '''
+
+    topo = NonBlockingTopo(k)
+    host = custom(CPULimitedHost, cpu=cpu)
+    link = custom(TCLink, bw=bw, max_queue_size=queue)
+
+    #net = Containernet(topo, host=host, link=link, switch=OVSKernelSwitch, controller=RemoteController)
+    net = Containernet(topo, host=host, link=link, switch=OVSKernelSwitch, controller=OVSController, autoSetMacs=True, autoStaticArp=False)
+
+    return net
+
+def FatTreeNet(k=4, bw=10, cpu=-1, queue=100):
+    ''' Create a Fat-Tree network '''
+
+    info('*** Creating the topology')
+    topo = FatTreeTopo(k)
+
+    host = custom(CPULimitedHost, cpu=cpu)
+    link = custom(TCLink, bw=bw, max_queue_size=queue)
+
+    net = Containernet(topo, host=host, link=link, switch=OVSKernelSwitch,
+            controller=RemoteController, autoStaticArp=True)
+
+    return net
+
+def LinearNet(n=2, m=4, bw=100, cpu=-1, queue=100):
+    ''' Create a Linear network '''
+
+    info('*** Creating the topology')
+    topo = LinearMultipathTopo(n,m)
+
+    host = custom(CPULimitedHost, cpu=cpu)
+    link = custom(TCLink, bw=bw, max_queue_size=queue)
+
+    net = Containernet(topo, host=host, link=link, switch=OVSKernelSwitch,
+            controller=RemoteController)
+
+    return net
+
+def RegularTreeNet(depth=4, fanout=2, bw=BW, cpu=-1, queue=100):
+    "Create an empty network and add nodes to it."
+    topo = TreeTopo(depth, fanout)
+    host = custom(CPULimitedHost, cpu=cpu)
+    link = custom(TCLink, bw=bw, max_queue_size=queue)
+    #net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=RemoteController, autoSetMacs=True, autoStaticArp=False)
+    net = Containernet(topo, host=host, link=link, switch=OVSKernelSwitch, controller=OVSController, autoSetMacs=True, autoStaticArp=False)
+
+    return net
+
+def SingleSwitchNet(numHosts=16, bw=BW, cpu=-1, queue=100, remoteController=False):
+    "Create an empty network and add nodes to it."
+    host = custom(CPULimitedHost, cpu=cpu)
+    #link = custom(TCLink, bw=bw, max_queue_size=queue, delay="1ms")
+    link = custom(TCLink, bw=bw)
+    if remoteController is True:
+        controller = RemoteController
+    else:
+        controller = OVSController
+    net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=controller, autoSetMacs=True, autoStaticArp=False)
+
+    info('*** Adding controller\n')
+    net.addController( 'c0' )
+
+    info('*** Adding hosts\n')
+    allHosts = []
+    i = 1
+
+    info('*** Adding hosts\n')
+    # Adding hosts
+    for n in irange(1, numHosts):
+        print "h%s" % n
+        host = net.addHost("h%s" % n, ip=("10.0.0.%s/24" % str(i)))
+        i = i + 1
+        allHosts.append(host)
+
+    info('*** Adding switches\n')
+    i = 1
+    # Adding switches
+    print "s%s" % i
+    switch = net.addSwitch("s%s" % i)
+
+    info('*** Creating links to hosts\n')
+    # Creating links to hosts
+    for n in irange(0, numHosts-1):
+        host = allHosts[n]
+        print "linking %s to %s" % (host.name, switch.name)
+        net.addLink(host, switch)
+        print ""
+
+    return net
+
+def SinglepathTreeNet(depth = 2, fanout = 4, bw=BW, cpu=-1, queue=100, remoteController=False):
+    "Create an empty network and add nodes to it."
+    host = custom(CPULimitedHost, cpu=cpu)
+    link = custom(TCLink, bw=bw, max_queue_size=queue)
+    if remoteController is True:
+        controller=RemoteController
+    else:
+        controller=OVSController
+    net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=controller, autoSetMacs=True, autoStaticArp=False)
+
+    info( '*** Adding controller\n' )
+    net.addController( 'c0' )
+
+    info('*** Adding hosts\n')
+    switches = []
+    allHosts = []
+    i = 1
+
+    depth = 2
+    fanout = 4
+
+    # Adding hosts
+    for n in irange(1, pow(depth,fanout)):
+        print "h%s" % n
+        host = net.addHost("h%s" % n, ip=("10.0.0.%s/24" % str(i)))
+        i = i + 1
+        allHosts.append(host)
+
+    info('*** Adding switches\n')
+    i = 1
+    # Adding switches
+    rootSwitches = []
+    print "s%s" % i
+    switch = net.addSwitch("s%s" % i)
+    rootSwitches.append(switch)
+    i = i + 1
+
+    torSwitches = []
+    for n in irange(1, 4):
+       print "s%s" % i
+       switch = net.addSwitch("s%s" % i)
+       torSwitches.append(switch)
+       i = i + 1
+
+    info('*** Wiring up switches\n')
+    # Wiring up switches
+    i = 1
+    for switch in torSwitches:
+        for up in rootSwitches:
+            if i == 1:
+                bandwidth=bw#10
+            else:
+                bandwidth=bw
+            bandwidth=bw
+            i = i + 1
+            link = custom(TCLink, bw=bandwidth, max_queue_size=queue)
+            linkObj = net.addLink(up, switch, cls=link)
+            print "link=" + str(linkObj)
+
+    info('*** Creating links to hosts\n')
+    # Creating links to hosts
+    for n in irange(0, 3):
+        switch = torSwitches[n]
+        for m in irange(0, 3):
+            host = allHosts[(n*4)+m]
+            print "linking %s to %s" % (host.name, switch.name)
+            net.addLink(host, switch)
+            print ""
+
+    return net
+
+
+def MultipathTreeNet(depth=2, fanout=4, bw=BW, cpu=-1, queue=100):
+    "Create an empty network and add nodes to it."
+    host = custom(CPULimitedHost, cpu=cpu)
+    link = custom(TCLink, bw=bw, max_queue_size=queue)
+    net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=RemoteController, autoSetMacs=True, autoStaticArp=False)
+
+    info( '*** Adding controller\n' )
+    net.addController( 'c0' )
+
+    info( '*** Adding hosts\n' )
+    switches = []
+    allHosts = []
+    i = 1
+
+    # Adding hosts
+    for n in irange(1, pow(depth,fanout)):
+        print "h%s" % n
+        host = net.addHost("h%s" % n, ip=("10.0.0.%s/24" % str(i)))
+        i = i + 1
+        allHosts.append(host)
+
+    info( '*** Adding switches\n' )
+    i = 1
+    # Adding switches
+    rootSwitches = []
+    for n in irange(1, 2):
+       print "s%s" % i
+       switch = net.addSwitch("s%s" % i)
+       rootSwitches.append(switch)
+       i = i + 1
+
+    torSwitches = []
+    for n in irange(1, 4):
+       print "s%s" % i
+       switch = net.addSwitch("s%s" % i)
+       torSwitches.append(switch)
+       i = i + 1
+
+    info( '*** Wiring up switches\n' )
+    # Wiring up switches
+    i = 1
+    for switch in torSwitches:
+        for up in rootSwitches:
+            if i == 1:
+                bandwidth=bw#10
+            else:
+                bandwidth=bw
+            #bandwidth=50
+            i = i + 1
+            link = custom(TCLink, bw=bandwidth, max_queue_size=queue)
+            linkObj = net.addLink(up, switch, cls=link)
+            print "link=" + str(linkObj)
+
+
+    info( '*** Creating links to hosts\n' )
+    # Creating links to hosts
+    for n in irange(0, 3):
+        switch = torSwitches[n]
+        for m in irange(0, 3):
+            host = allHosts[(n*4)+m]
+            print "linking %s to %s" % (host.name, switch.name)
+            net.addLink(host, switch)
+            print ""
+    return net
+
+
+def DumbbellNet(numSwitches=2, numHostsPerSwitch=8, L=1, bw=BW, cpu=-1, queue=100, remoteController=True):
+    "Create an empty network and add nodes to it."
+    host = custom(CPULimitedHost, cpu=cpu)
+    link = custom(TCLink, bw=bw, max_queue_size=queue)
+    if remoteController is True:
+        controller=RemoteController
+    else:
+        controller=OVSController
+    net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=controller, autoSetMacs=True, autoStaticArp=False)
+
+    info('*** Adding controller\n')
+    if remoteController is True:
+        #net.addController('c0', ip='172.16.2.1', port=6633)
+        net.addController('c0', ip='127.0.0.1', port=6633)
+    else:
+       net.addController('c0')
+
+    info('*** Adding hosts\n')
+    switches = []
+    allHosts = []
+    i = 1
+
+    # Adding hosts
+    for n in irange(1, numSwitches):
+#        print "s%s" % n
+#        switch = net.addSwitch("s%s" % n)
+#        switches.append(switch)
+        hosts = []
+        for m in irange(1, numHostsPerSwitch):
+            print "s%sh%s" % (n, m)
+            host = net.addHost("s%sh%s" % (n, m), ip=("10.0.0.%s/24" % str(i)))
+            i = i + 1
+            hosts.append(host)
+ #           net.addLink(host, switch)
+        allHosts.append(hosts)
+
+    info('*** Adding switches\n')
+    # Adding switches
+    for n in irange(1, numSwitches):
+       print "s%s" % n
+       switch = net.addSwitch("s%s" % n)
+       switches.append(switch)
+
+    info('*** Wiring up switches\n')
+    # Wiring up switches
+    i = 1
+    last = None
+    for switch in switches:
+        if last:
+            for l in irange(1, L):
+#               print "linking %s to %s" % (last.name, switch.name)
+                if i == 1:
+                    bandwidth=10
+                else:
+                    bandwidth=bw
+                bandwidth=bw
+                i = i + 1
+                link = custom(TCLink, bw=bandwidth, max_queue_size=queue)
+                linkObj = net.addLink(last, switch, cls=link)
+                print "link=" + str(linkObj)
+        last = switch
+
+    info('*** Creating links to hosts\n')
+    # Creating links to hosts
+    for n in irange(0, numSwitches-1):
+        switch = switches[n]
+        for host in allHosts[n]:
+            print "linking %s to %s" % (host.name, switch.name)
+            net.addLink(host, switch)
+            print ""
+
+    return net
+
+def ShamrockNet(numSwitches=2, numHostsFirstSwitch=12, numHostsSecondSwitch=4, L=1, bw=BW, cpu=-1, queue=100, remoteController=True):
+    "Create an empty network and add nodes to it."
+    host = custom(CPULimitedHost, cpu=cpu)
+    link = custom(TCLink, bw=bw, max_queue_size=queue)
+    if remoteController is True:
+        controller=RemoteController
+    else:
+        controller=OVSController
+    net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=controller, autoSetMacs=True, autoStaticArp=False)
+
+    info('*** Adding controller\n')
+    if remoteController is True:
+        #net.addController('c0', ip='172.16.2.1', port=6633)
+        net.addController('c0', ip='127.0.0.1', port=6633)
+    else:
+       net.addController('c0')
+
+    info('*** Adding hosts\n')
+    switches = []
+    allHosts = []
+    numSwitches = 2
+    i = 1
+
+    # Adding hosts
+    n = "1"
+    hosts = []
+    for m in irange(1, numHostsFirstSwitch):
+        print "s%sh%s" % (n, m)
+        host = net.addHost("s%sh%s" % (n, m), ip=("10.0.0.%s/24" % str(i)))
+        i = i + 1
+        hosts.append(host)
+    allHosts.append(hosts)
+
+    n = "2"
+    hosts = []
+    for m in irange(1, numHostsSecondSwitch):
+        print "s%sh%s" % (n, m)
+        host = net.addHost("s%sh%s" % (n, m), ip=("10.0.0.%s/24" % str(i)))
+        i = i + 1
+        hosts.append(host)
+    allHosts.append(hosts)
+
+    info('*** Adding switches\n')
+    # Adding switches
+    for n in irange(1, numSwitches):
+       print "s%s" % n
+       switch = net.addSwitch("s%s" % n)
+       switches.append(switch)
+
+    info('*** Wiring up switches\n')
+    # Wiring up switches
+    i = 1
+    last = None
+    for switch in switches:
+        if last:
+            for l in irange(1, L):
+#               print "linking %s to %s" % (last.name, switch.name)
+#                if i == 1:
+#                    bandwidth=10
+#                else:
+#                    bandwidth=bw
+                #bandwidth=bw
+                bandwidth=1000
+                i = i + 1
+                link = custom(TCLink, bw=bandwidth, max_queue_size=queue)
+                linkObj = net.addLink(last, switch, cls=link)
+                print "link=" + str(linkObj)
+        last = switch
+
+    info('*** Creating links to hosts\n')
+    # Creating links to hosts
+    for n in irange(0, numSwitches-1):
+        switch = switches[n]
+        for host in allHosts[n]:
+            print "linking %s to %s" % (host.name, switch.name)
+            net.addLink(host, switch)
+            print ""
+
+    return net
+
+
+def CoflowEmuNet(node_count=16, bw=BW, cpu=-1, queue=100, remoteController=False):
+    "Create an empty network and add nodes to it."
+    #setattr(Mininet, 'start', wrapper(Mininet.__dict__['start'], '127.0.0.1'))
+    param = {}
+    execfile('./sflow.py',param,param)
+    for name,val in param.iteritems():
+        globals()[name] = val
+    host = custom(Docker, dimage="emulator:cn")
+    #link = custom(TCLink, bw=bw, max_queue_size=queue, delay="1ms")
+    link = custom(TCLink, bw=bw)
+    if remoteController is True:
+        controller = RemoteController
+    else:
+        controller = Controller
+    net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=controller, autoSetMacs=True, autoStaticArp=False)
+
+    info('*** Adding controller\n')
+    if remoteController is True:
+        net.addController('c0',ip='127.0.0.1',port=6653)
+    else:
+        net.addController( 'c0' )
+
+    info('*** Adding hosts\n')
+    allHosts = []
+    i = 1
+
+    info('*** Adding master\n')
+    host = net.addDocker("master", ip='10.0.0.254', dimage="emulator:cn", environment=["EMU_LOCAL_IP=10.0.0.254"], ports=[16016], port_bindings={16016:19999})
+   #host.sendCmd("./run varys.framework.master.EmulationMaster --ip 10.0.0.254 --port 1606 --trace /varys/core/src/main/resources/traces/TestTrace.txt")
+    #debug
+    #print host.dcinfo
+
+    i = i + 1
+    allHosts.append(host)
+
+    info('*** Adding nodes\n')
+    # Adding hosts
+    for n in irange(1, node_count):
+        print "m%s" % n
+    	nodeip = "10.0.0.%s" % str(i)
+        host = net.addHost("m%s" % n, ip=nodeip, dimage="emulator:cn", network_mode="none", environment=["EMU_LOCAL_IP=%s" % nodeip])
+        # host.sendCmd("./bin/start-slave.sh varys://10.0.0.254:1606")
+        # cmdstr = "./run varys.examples.EmulationSlave varys://10.0.0.254:1606 /varys/core/src/main/resources/traces/TestTrace.txt "+str(n)
+        # host.sendCmd(cmdstr)
+        i = i + 1
+        allHosts.append(host)
+
+    info('*** Adding switches\n')
+    i = 1
+    # Adding switches
+    print "s%s" % i
+    switch = net.addSwitch("s%s" % i)
+
+    info('*** Creating links to hosts\n')
+    # Creating links to hosts
+    for n in irange(0, len(allHosts)-1):
+        host = allHosts[n]
+        print "linking %s to %s" % (host.name, switch.name)
+        net.addLink(host, switch)
+        print ""
+
+    return net
+
+def CoflowMininet(node_count=16, bw=BW, cpu=-1, queue=100, remoteController=False):
+    "Create an empty network and add nodes to it."
+    #setattr(Mininet, 'start', wrapper(Mininet.__dict__['start'], '127.0.0.1'))
+    #host = custom(Docker, dimage="emulator:v2")
+    host = custom(CPULimitedHost, cpu=cpu)
+    #link = custom(TCLink, bw=bw, max_queue_size=queue, delay="1ms")
+    link = custom(TCLink, bw=bw)
+    if remoteController is True:
+        controller = RemoteController
+    else:
+        controller = Controller
+    net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=controller, autoSetMacs=True, autoStaticArp=False)
+
+    info('*** Adding controller\n')
+    net.addController( 'c0' )
+
+    info('*** Adding hosts\n')
+    allHosts = []
+    i = 1
+
+    info('*** Adding master\n')
+    host = net.addHost("master", ip='10.0.0.254')
+   #host.sendCmd("./run varys.framework.master.EmulationMaster --ip 10.0.0.254 --port 1606 --trace /varys/core/src/main/resources/traces/TestTrace.txt")
+    #debug
+    #print host.dcinfo
+
+    i = i + 1
+    allHosts.append(host)
+
+    info('*** Adding nodes\n')
+    # Adding hosts
+    for n in irange(1, node_count):
+        print "m%s" % n
+        nodeip = "10.0.0.%s" % str(i)
+        host = net.addHost("m%s" % n, ip=nodeip)
+        # host.sendCmd("./bin/start-slave.sh varys://10.0.0.254:1606")
+        # cmdstr = "./run varys.examples.EmulationSlave varys://10.0.0.254:1606 /varys/core/src/main/resources/traces/TestTrace.txt "+str(n)
+        # host.sendCmd(cmdstr)
+        i = i + 1
+        allHosts.append(host)
+
+    info('*** Adding switches\n')
+    i = 1
+    # Adding switches
+    print "s%s" % i
+    switch = net.addSwitch("s%s" % i)
+
+    info('*** Creating links to hosts\n')
+    # Creating links to hosts
+    for n in irange(0, len(allHosts)-1):
+        host = allHosts[n]
+        print "linking %s to %s" % (host.name, switch.name)
+        net.addLink(host, switch)
+        print ""
+
+    return net

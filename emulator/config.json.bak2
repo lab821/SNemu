@@ -1,0 +1,7 @@
+{
+	"numNodes": 3,
+	"remoteController": false,
+	"networkTopology": "DockerSpark",
+	"bandwidthMininet": 1000,
+        "trace": "spark/tasktrace-pr-gen-247-12.txt"
+}

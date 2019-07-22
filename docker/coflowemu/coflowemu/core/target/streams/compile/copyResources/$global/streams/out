@@ -1,0 +1,13 @@
+[0m[[0mdebug[0m] [0mCopy resource mappings: [0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/traces,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/traces)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/coflowemu,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/coflowemu)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/log4j.properties,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/log4j.properties)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/trace.properties,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/trace.properties)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/traces/FB2010-1Hr-150-0.txt,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/traces/FB2010-1Hr-150-0.txt)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/traces/TestTrace.txt,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/traces/TestTrace.txt)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/coflowemu/ui,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/coflowemu/ui)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/coflowemu/ui/static,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/coflowemu/ui/static)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/coflowemu/ui/static/webui.css,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/coflowemu/ui/static/webui.css)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/coflowemu/ui/static/sorttable.js,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/coflowemu/ui/static/sorttable.js)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/coflowemu/ui/static/bootstrap-responsive.min.css,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/coflowemu/ui/static/bootstrap-responsive.min.css)[0m
+[0m[[0mdebug[0m] [0m	(/home/pc/coflowemu/docker/coflowemu/coflowemu/core/src/main/resources/coflowemu/ui/static/bootstrap.min.css,/home/pc/coflowemu/docker/coflowemu/coflowemu/core/target/scala-2.10/classes/coflowemu/ui/static/bootstrap.min.css)[0m

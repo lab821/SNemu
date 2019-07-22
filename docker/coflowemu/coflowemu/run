@@ -1,0 +1,96 @@
+#!/bin/bash
+
+SCALA_VERSION=2.10
+
+# Figure out where it is installed
+FWDIR="$(cd `dirname $0`; pwd)"
+
+# Export this as VARYS_HOME
+export VARYS_HOME="$FWDIR"
+
+# Load environment variables from conf/coflowemu-env.sh, if it exists
+if [ -e $FWDIR/conf/coflowemu-env.sh ] ; then
+  . $FWDIR/conf/coflowemu-env.sh
+fi
+
+if [ -z "$1" ]; then
+  echo "Usage: run <coflowemu-class> [<args>]" >&2
+  exit 1
+fi
+
+if [ "$VARYS_LAUNCH_WITH_SCALA" == "1" ]; then
+  if [ `command -v scala` ]; then
+    RUNNER="scala"
+  else
+    if [ -z "$SCALA_HOME" ]; then
+      echo "SCALA_HOME is not set" >&2
+      exit 1
+    fi
+    RUNNER="${SCALA_HOME}/bin/scala"
+  fi
+else
+  if [ `command -v java` ]; then
+    RUNNER="java"
+  else
+    if [ -z "$JAVA_HOME" ]; then
+      echo "JAVA_HOME is not set" >&2
+      exit 1
+    fi
+    RUNNER="${JAVA_HOME}/bin/java"
+  fi
+  if [ -z "$SCALA_LIBRARY_PATH" ]; then
+    if [ -z "$SCALA_HOME" ]; then
+      echo "SCALA_HOME is not set" >&2
+      exit 1
+    fi
+    SCALA_LIBRARY_PATH="$SCALA_HOME/lib"
+  fi
+fi
+
+if [ -z "$VARYS_MEM" ] ; then
+  VARYS_MEM="512m"
+fi
+export VARYS_MEM
+
+# Set JAVA_OPTS to be able to load native libraries and to set heap size
+JAVA_OPTS="$VARYS_JAVA_OPTS"
+JAVA_OPTS+=" -Djava.library.path=$VARYS_LIBRARY_PATH"
+JAVA_OPTS+=" -Xms$VARYS_MEM -Xmx$VARYS_MEM"
+# Load extra JAVA_OPTS from conf/java-opts, if it exists
+if [ -e $FWDIR/conf/java-opts ] ; then
+  JAVA_OPTS+=" `cat $FWDIR/conf/java-opts`"
+fi
+export JAVA_OPTS
+
+CORE_DIR="$FWDIR/core"
+EXAMPLES_DIR="$FWDIR/services"
+
+# Build up classpath
+CLASSPATH="$VARYS_CLASSPATH"
+CLASSPATH+=":$FWDIR/conf"
+CLASSPATH+=":$CORE_DIR/target/scala-$SCALA_VERSION/classes"
+CLASSPATH+=":$CORE_DIR/src/main/resources"
+CLASSPATH+=":$EXAMPLES_DIR/target/scala-$SCALA_VERSION/classes"
+if [ -e "$FWDIR/lib_managed" ]; then
+  CLASSPATH+=":$FWDIR/lib_managed/jars/*"
+  CLASSPATH+=":$FWDIR/lib_managed/bundles/*"
+fi
+export CLASSPATH
+
+# Figure out whether to run our class with java or with the scala launcher.
+# In most cases, we'd prefer to execute our process with java because scala
+# creates a shell script as the parent of its Java process, which makes it
+# hard to kill the child with stuff like Process.destroy(). However, for
+# the Varys shell, the wrapper is necessary to properly reset the terminal
+# when we exit, so we allow it to set a variable to launch with scala.
+if [ "$VARYS_LAUNCH_WITH_SCALA" == "1" ]; then
+  EXTRA_ARGS=""     # Java options will be passed to scala as JAVA_OPTS
+else
+  CLASSPATH+=":$SCALA_LIBRARY_PATH/scala-library.jar"
+  CLASSPATH+=":$SCALA_LIBRARY_PATH/scala-compiler.jar"
+  CLASSPATH+=":$SCALA_LIBRARY_PATH/jline.jar"
+  # The JVM doesn't read JAVA_OPTS by default so we need to pass it in
+  EXTRA_ARGS="$JAVA_OPTS"
+fi
+
+exec "$RUNNER" -cp "$CLASSPATH" $EXTRA_ARGS "$@"

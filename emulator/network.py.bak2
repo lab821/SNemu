@@ -1,0 +1,163 @@
+from mininet.topo import Topo
+from mininet.node import Controller, RemoteController, OVSKernelSwitch, CPULimitedHost, OVSController, Docker
+from mininet.net import Containernet, Mininet
+from mininet.link import TCLink
+from mininet.cli import CLI
+from mininet.util import custom, irange
+from mininet.log import setLogLevel, info, warn, error, debug
+from mininet.topo import LinearTopo
+from mininet.topolib import TreeTopo
+
+from topology import FatTreeTopo, NonBlockingTopo, LinearMultipathTopo
+
+from subprocess import Popen, PIPE
+from argparse import ArgumentParser
+import multiprocessing
+from time import sleep
+#from monitor.monitor import monitor_devs_ng
+import os
+import sys
+import json
+from sflow import wrapper
+
+#from simulator import simulator
+
+# Number of pods in Fat-Tree
+K = 4
+
+# Queue Size
+QUEUE_SIZE = 100
+
+# Link capacity (Mbps)
+BW = 10
+
+def CoflowEmuNet(node_count=16, bw=BW, cpu=-1, queue=100, remoteController=False):
+    "Create an empty network and add nodes to it."
+    #setattr(Mininet, 'start', wrapper(Mininet.__dict__['start'], '127.0.0.1'))
+    param = {}
+    execfile('./sflow.py',param,param)
+    for name,val in param.iteritems():
+        globals()[name] = val
+    host = custom(Docker, dimage="emulator:cn")
+    #link = custom(TCLink, bw=bw, max_queue_size=queue, delay="1ms")
+    link = custom(TCLink, bw=bw)
+    if remoteController is True:
+        controller = RemoteController
+    else:
+        controller = Controller
+    net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=controller, autoSetMacs=True, autoStaticArp=False)
+
+    info('*** Adding controller\n')
+    if remoteController is True:
+        net.addController('c0',ip='127.0.0.1',port=6653)
+    else:
+        net.addController( 'c0' )
+
+    info('*** Adding hosts\n')
+    allHosts = []
+    i = 1
+
+    info('*** Adding master\n')
+    host = net.addDocker("master", ip='10.0.0.254', dimage="emulator:cn", environment=["EMU_LOCAL_IP=10.0.0.254"], ports=[16016], port_bindings={16016:19999})
+   #host.sendCmd("./run varys.framework.master.EmulationMaster --ip 10.0.0.254 --port 1606 --trace /varys/core/src/main/resources/traces/TestTrace.txt")
+    #debug
+    #print host.dcinfo
+
+    i = i + 1
+    allHosts.append(host)
+
+    info('*** Adding nodes\n')
+    # Adding hosts
+    for n in irange(1, node_count):
+        print ("m%s" % n)
+    	nodeip = "10.0.0.%s" % str(i)
+        host = net.addHost("m%s" % n, ip=nodeip, dimage="emulator:cn", network_mode="none", environment=["EMU_LOCAL_IP=%s" % nodeip])
+        # host.sendCmd("./bin/start-slave.sh varys://10.0.0.254:1606")
+        # cmdstr = "./run varys.examples.EmulationSlave varys://10.0.0.254:1606 /varys/core/src/main/resources/traces/TestTrace.txt "+str(n)
+        # host.sendCmd(cmdstr)
+        i = i + 1
+        allHosts.append(host)
+
+    info('*** Adding switches\n')
+    i = 1
+    # Adding switches
+    print ("s%s" % i)
+    switch = net.addSwitch("s%s" % i)
+
+    info('*** Creating links to hosts\n')
+    # Creating links to hosts
+    for n in irange(0, len(allHosts)-1):
+        host = allHosts[n]
+        print ("linking %s to %s" % (host.name, switch.name))
+        net.addLink(host, switch)
+        print ("")
+
+    return net
+
+
+def DockerSparkNet(cluster_count=1, bw=BW, remoteController=False):
+    param = {}
+    execfile('./sflow.py',param,param)
+    for name,val in param.iteritems():
+        globals()[name] = val
+    host = custom(Docker, dimage="spark:s0")
+    #link = custom(TCLink, bw=bw, max_queue_size=queue, delay="1ms")
+    link = custom(TCLink, bw=bw)
+    if remoteController is True:
+        controller = RemoteController
+    else:
+        controller = Controller
+    net = Containernet(host=host, link=link, switch=OVSKernelSwitch, controller=controller, autoSetMacs=True, autoStaticArp=False)
+
+    info('*** Adding controller\n')
+    if remoteController is True:
+        net.addController('c0',ip='127.0.0.1',port=6653)
+    else:
+        net.addController( 'c0' )
+
+    info('*** Adding hosts\n')
+    allHosts = []
+    i = 1
+
+    # adding cluster
+    for j in range(1):
+        # adding master
+        info ('*** Adding cluster %s \n '%str(j))
+        with open('hosts.txt','w') as file:
+            file.write("127.0.0.1   localhost\n")
+            nodeip = "172.20.0.%s" % str(i+1)
+            host = net.addDocker("master", ip=nodeip,dimage="spark:s0", ports=[7077,8080,18080], port_bindings={7077:7077,8080:8080, 18080:18080}, cpuset_cpus='%s-%s'%(str((i-1)*8),str(i*8-1)), mem_limit='10g')
+            file.write(nodeip + "    master\n")
+            i = i + 1
+            allHosts.append(host)
+            #adding slaves
+            with open('slaves.txt','w') as sf:
+                for n in irange(1, 4):
+                    print ("slave%s-%s" % (str(j),str(n)))
+                    nodeip = "172.20.0.%s" % str(i+1)
+                    host = net.addHost("slave%s-%s" % (str(j),str(n)), ip=nodeip, dimage="spark:s0",ports=[8081],port_bindings={8081:8081}, network_mode="none", cpuset_cpus='%s-%s'%(str((i-1)*8),str(i*8-1)), mem_limit='10g')
+                    # host.sendCmd("./bin/start-slave.sh varys://10.0.0.254:1606")
+                    # cmdstr = "./run varys.examples.EmulationSlave varys://10.0.0.254:1606 /varys/core/src/main/resources/traces/TestTrace.txt "+str(n)
+                    # host.sendCmd(cmdstr)
+                    i = i + 1
+                    allHosts.append(host)
+                    file.write(nodeip + "    slave%s-%s\n"% (str(j),str(n)))
+                    sf. write("slave%s-%s\n"% (str(j),str(n)))
+
+    info('*** Adding switches\n')
+    i = 1
+    # Adding switches
+    print ("s%s" % str(i))
+    switch = net.addSwitch("s%s" % str(i))
+
+    info('*** Creating links to hosts\n')
+    # Creating links to hosts
+    for n in irange(0, len(allHosts)-1):
+        host = allHosts[n]
+        print ("linking %s to %s" % (host.name, switch.name))
+        net.addLink(host, switch)
+        print ("")
+
+    return net
+
+

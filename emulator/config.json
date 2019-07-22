@@ -1,0 +1,16 @@
+{
+	"numNodes": 3,
+	"remoteController": false,
+	"networkTopology": "CoflowEmuNet",
+	"bandwidthMininet": 1000,
+	"trace": "spark/tasktrace-pr-gen-247-12.txt",
+	"image":"emulator:cn",
+	"clusters":[
+		{
+			"slaves":1,
+			"cores":2,
+			"memory":"8g",
+			"parallelism":144
+		}
+	]
+}
